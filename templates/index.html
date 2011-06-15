@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome{% endblock %}
+{% block page_title %}Welcome to Allowance Bank{% endblock %}
+
+{% block header_link %}
+  {% if current_user %}
+  <p><a href="/accounts">Your Children's Accounts</a></p>
+  {% endif %}
+{% endblock %}
+
+{% block main_content %}
+<div id="left_spacer" class="grid_3"><br /></div>
+<div id="main_content" class="grid_6">
+    <p>
+    Allowance Bank is an application to help you keep track of a savings account
+    for your children and to teach them about interest and financial planning.
+    </p>
+    <p>
+    With Allowance Bank you can
+    <ul>
+      <li>Run an interest-bearing savings account for your children</li>
+      <li>Set up an allowance for your children and help them allocate their
+          money between pocket money and their savings account.</li>
+      <li>Teach your children about saving for goals</li>
+    </ul>
+    </p>
+</div>
+<div id="right_spacer" class="grid_3"><br /></div>
+{% endblock %}

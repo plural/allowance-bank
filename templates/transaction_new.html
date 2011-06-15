@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Add a Transaction For {{ account.child_first_name }}'s Account{% endblock %}
+{% block page_title %}Add a Transaction For {{ account.child_first_name }}'s Account{% endblock %}
+
+{% block header_link %}
+  <p><a href="/accounts">Back to Accounts</a></p>
+{% endblock %}
+
+{% block main_content %}
+<div class="grid_2"><br /></div>
+
+<div id="transaction_list" class="grid_8">
+    {{ account.getImgSrc }}
+    <form action="/transaction_new" method="post">
+      <input type="hidden" name="account" value="{{ account.key }}" />
+      <div>Transaction Type:
+        <select name="transaction_type">
+          <!-- TODO(jgessner): add a deposit transaction type -->
+          <option value="allowance_to_savings">Allowance to Savings</option>
+          <option value="allowance_to_cash">Allowance to Cash</option>
+          <option value="withdrawal">Withdrawal</option>
+        </select>
+      </div>
+      <div>Amount: <input type="text" name="amount" /></div>
+      <div><input type="submit" value="Add New Transaction"></div>
+    </form>
+</div>
+
+<div class="grid_2"><br /></div>
+{% endblock %}

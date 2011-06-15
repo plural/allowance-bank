@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Add a New Account{% endblock %}
+{% block page_title %}Add a New Account{% endblock %}
+
+{% block header_link %}
+  <p><a href="/accounts">Back to Accounts</a></p>
+{% endblock %}
+
+{% block main_content %}
+<div class="grid_3"><br /></div>
+
+{% include 'account_graphs.js' %}
+
+<div id="new_account" class="grid_3">
+    <form action="/account_new" enctype="multipart/form-data" method="post">
+      <div>Child's First Name: <input type="text" id="child_first_name" name="child_first_name" /></div>
+      <div>Child's Image (will be resized to fit in 200x200) <input type="file" id="child_image" name="child_image"/></div>
+      <div>Interest Rate (%): <input type="text" id="interest_rate" name="interest_rate" onchange="updateAccountGraphs(this);" /></div>
+      <div>Interest Compound Frequency:
+        <select id="interest_compound_frequency" name="interest_compound_frequency" onchange="updateAccountGraphs(this);">
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+      <div>Curency: <input type="text" id="currency" name="currency" value="USD" onchange="updateAccountGraphs(this);" /></div>
+      <div>Opening Date: <input type="text" id="open_date" name="open_date" value="{{ today }}" onchange="updateAccountGraphs(this);" /></div>
+      <div>Opening Balance: <input type="text" id="opening_balance" name="opening_balance" onchange="updateAccountGraphs(this);" /></div>
+      <div>Allowance Amount: <input type="text" id="allowance_amount" name="allowance_amount" onchange="updateAccountGraphs(this);" /></div>
+      <div>Allowance Frequency:
+        <select id="allowance_frequency" name="allowance_frequency" onchange="updateAccountGraphs(this);">
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+      <div>Allowance Start Date: <input type="text" id="allowance_start_date" name="allowance_start_date" onchange="updateAccountGraphs();" onchange="updateAccountGraphs(this);" /></div>
+      <div><input type="submit" value="Add New Account"></div>
+    </form>
+</div>
+<div id="graphygoodness" class="grid_3">
+  <div id="balance_chart">A graph with the account balances for the next year will be drawn when you fill out the opening, intererst and allowance fields on the form. Use this graph to help you find the right settings for your child's account.</div>
+  <div id="balance_details"></div>
+  <br />
+</div>
+
+<div class="grid_3"><br /></div>
+</div>
+<script language="JavaScript">
+prepareGoogleVisualizationAPI(staticUpdateAccountGraphs);
+</script>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}{{ account.child_first_name }}'s Account Transactions{% endblock %}
+{% block page_title %}{{ account.child_first_name }}'s Account Transactions{% endblock %}
+
+{% block header_link %}
+  <p><a href="/accounts">Back to Accounts</a></p>
+{% endblock %}
+
+{% block main_content %}
+<div class="grid_2"><br /></div>
+
+{% include 'account_graphs.js' %}
+
+<div id="transaction_list" class="grid_4">
+  {{ account.getImgSrc }}
+  <table>
+    <thead>
+      <tr>
+       <th>Date</th>
+       <th>Type</th>
+       <th>Amount</th>
+       <th>Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for pending_transaction in pending_transactions %}
+      <tr>
+        <td>{{ pending_transaction.transaction_date }}</td>
+        <td>pending allowance</td>
+        <td>{{ pending_transaction.getAmountForPrinting }}</td>
+        <td><a href="/allocate_allowance?account={{ account.key }}&date={{ pending_transaction.transaction_date }}">Allocate Allowance</a></td>
+      </tr>
+    {% endfor %}
+    {% for transaction in transactions %}
+      <tr>
+        <td>{{ transaction.date }}</td>
+        <td>{{ transaction.type }}</td>
+        <td>{{ transaction.amount }}</td>
+        <td>{{ transaction.balance }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="grid_4">
+  <div id="transaction_chart"></div>
+</div>
+<div class="grid_2"><br /></div>
+
+<script language="JavaScript">
+function transactionsSumValuesThrough(data, cutoffDate, keysFilter) {
+  var sum = 0;
+  for (var index in data) {
+    var thisDate = data[index]['transactionDate'];
+    var transactionType = data[index]['transactionType'];
+    var amount = data[index]['transactionAmount'];
+    if (thisDate <= cutoffDate) {
+      for (var i in keysFilter) {
+        if (transactionType == keysFilter[i]) {
+          sum += amount;
+          break;
+        }
+      }
+    }
+  }
+  return sum;
+}
+
+function updateTransactionGraph() {
+  // key will be a js date, value will be another hash with transaction type as
+  // the key and the amount as the value
+  var transactions = {};
+
+  var rawTransactions = [];
+  {% for transaction in transactions %}
+  rawTransactions.push({
+      transactionDate: Date.parse('{{ transaction.date }}'),
+      transactionType: '{{ transaction.type }}',
+      transactionAmount: {{ transaction.amount }}});
+  {% endfor %}
+
+  var minDate;  var maxDate;
+  for (var transaction in rawTransactions) {
+    var thisDate = rawTransactions[transaction]['transactionDate'];
+    if (!minDate || (thisDate < minDate)) {
+      minDate = thisDate.clone();
+    }
+    if (!maxDate || (thisDate > maxDate)) {
+      maxDate = thisDate.clone();
+    }
+  }
+
+  console.log('Min = ' + minDate + ', Max = ' + maxDate + ' (' + (maxDate - minDate) + ')');
+  // TODO(jgessner): add a little control panel widget or some smarts to detect
+  //                 the appropriate date range/interval here.
+  var dataTable = new google.visualization.DataTable();
+  dataTable.addColumn('date', 'Date');
+  dataTable.addColumn('number', 'Balance');
+  dataTable.addColumn('number', 'Interest Earned');
+
+  var dayNum = 0;
+  while (true) {
+    thisDate = minDate.clone().addDays(dayNum);
+    if (thisDate > maxDate) {
+      break;
+    }
+    dataTable.addRow();
+    dataTable.setValue(dayNum, 0, thisDate);
+    var balance = parseFloat(transactionsSumValuesThrough(rawTransactions, thisDate, ['Opening Balance', 'withdrawal', 'allowance_to_savings', 'interest']).toFixed(2));
+    var interest = parseFloat(transactionsSumValuesThrough(rawTransactions, thisDate, ['interest']).toFixed(2));
+    dataTable.setValue(dayNum, 1, balance);
+    dataTable.setValue(dayNum, 2, interest);
+
+    dayNum++;
+  }
+
+  var chart = new google.visualization.LineChart(document.getElementById('transaction_chart'));
+  chart.draw(dataTable, {chartArea: {left: 50, top: 20}, width: 600, height: 400, title: 'Account Balance'});
+}
+
+prepareGoogleVisualizationAPI(updateTransactionGraph);
+</script>
+{% endblock %}

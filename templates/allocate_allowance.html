@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Allocate Allowance for {{ account.child_first_name }}'s Account{% endblock %}
+{% block page_title %}Allocate Allowance For {{ account.child_first_name }}'s Account{% endblock %}
+
+{% block header_link %}
+  <p><a href="/accounts">Back to Accounts</a></p>
+{% endblock %}
+
+{% block main_content %}
+<div class="grid_2"><br /></div>
+
+<script language="JavaScript">
+var amountToAllocate = parseFloat({{ pending_transaction.getAmountForPrinting }});
+
+function updateAllocations(element) {
+  var saveAmountElement = window.document.forms[0].save_amount;
+  var pocketAmountElement = window.document.forms[0].pocket_amount;
+
+  var amount = parseFloat(element.value);
+  // if anything is wrong with the changes, set to 100% save, 0% pocket money.
+  if (amount < 0 || amount > amountToAllocate) {
+    saveAmountElement.value = amountToAllocate;
+    pocketAmountElement.value = '0.00';
+    return;
+  }
+  other_amount = amountToAllocate - amount;
+  if (element.name == 'save_amount') {
+    pocketAmountElement.value = other_amount.toFixed(2);
+  } else {
+    saveAmountElement.value = other_amount.toFixed(2);
+  }
+}
+
+</script>
+<div id="transaction_list" class="grid_8">
+    {{ account.getImgSrc }}
+    <form action="/allocate_allowance" method="post">
+      <input type="hidden" name="account" value="{{ account.key }}" />
+      <input type="hidden" name="date" value="{{ pending_transaction.transaction_date }}" />
+      <div>Allocate {{ pending_transaction.getAmountForPrinting }} Allowance:
+      <input type="hidden" name="amount" value="{{ pending_transaction.getAmountForPrinting }}" /></div>
+      <div>Amount to Save: <input type="text" name="save_amount" value="{{ pending_transaction.getAmountForPrinting }}" onchange="updateAllocations(this)" /></div>
+      <div>Pocket Money: <input type="text" name="pocket_amount" value="0.00" onchange="updateAllocations(this)" /></div>
+      <div><input type="submit" value="Allocate"></div>
+    </form>
+</div>
+
+<div class="grid_2"><br /></div>
+{% endblock %}

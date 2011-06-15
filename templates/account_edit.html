@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ account.child_first_name }}'s Account{% endblock %}
+{% block page_title %}Edit {{ account.child_first_name }}'s Account{% endblock %}
+
+{% block header_link %}
+  <p><a href="/accounts">Back to Accounts</a></p>
+{% endblock %}
+
+{% block main_content %}
+<div class="grid_3"><br /></div>
+
+{% include 'account_graphs.js' %}
+
+<div id="edit_account" class="grid_3">
+    {{ account.getImgSrc }}
+    <form action="/account_edit" enctype="multipart/form-data" method="post">
+      <input type="hidden" name="account" value="{{ account.key }}" />
+      <div>Child's First Name: <input type="text" id="child_first_name" name="child_first_name" value="{{ account.child_first_name }}" /></div>
+      <div>Child's Image (will be resized to fit in 200x200) <input type="file" id="child_image" name="child_image"/></div>
+      <div>Interest Rate (%): <input type="text" id="interest_rate" name="interest_rate" value="{{ account.interest_rate }}"  onchange="updateAccountGraphs(this);" /></div>
+      <div>Interest Compound Frequency:
+        <select id="interest_compound_frequency" name="interest_compound_frequency" onchange="updateAccountGraphs(this);" >
+          <option value="weekly" {% ifequal account.interest_compound_frequency 'weekly' %} selected="true"{% endifequal %}>weekly</option>
+          <option value="monthly" {% ifequal account.interest_compound_frequency 'monthly' %} selected="true"{% endifequal %}>monthly</option>
+        </select>
+      </div>
+      <div>Curency: <input type="text" id="curency" name="currency" value="{{ account.currency }}" /></div>
+      <div>Opening Date: <input type="text" id="open_date" name="open_date" value="{{ account.getOpenDate }}"  onchange="updateAccountGraphs(this);" /></div>
+      <div>Opening Balance: <input type="text" id="opening_balance" name="opening_balance" value="{{ account.getOpeningBalanceForPrinting }}"  onchange="updateAccountGraphs(this);" /></div>
+      <div>Allowance Amount: <input type="text" id="allowance_amount" name="allowance_amount" value="{{ account.getAllowanceAmountForPrinting }}"  onchange="updateAccountGraphs(this);" /></div>
+      <div>Allowance Frequency:
+        <select id="allowance_frequency" name="allowance_frequency" onchange="updateAccountGraphs(this);" >
+          <option value="weekly" {% ifequal account.allowance_frequency 'weekly' %} selected="true"{% endifequal %}>weekly</option>
+          <option value="monthly" {% ifequal account.allowance_frequency 'monthly' %} selected="true"{% endifequal %}>monthly</option>
+        </select>
+      </div>
+      <div>Allowance Start Date: <input type="text" id="allowance_start_date" name="allowance_start_date" value="{{ account.allowance_start_date }}" onchange="updateAccountGraphs(this);" /></div>
+      <div><input type="submit" value="Update Account"></div>
+    </form>
+</div>
+<div id="graphygoodness" class="grid_3">
+  <div id="balance_chart">Drawing Graph...</div>
+  <div id="balance_details"></div>
+  <br />
+</div>
+<div class="grid_3"><br /></div>
+<script language="JavaScript">
+prepareGoogleVisualizationAPI(staticUpdateAccountGraphs);
+</script>
+{% endblock %}

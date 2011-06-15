@@ -1,0 +1,8 @@
+cron:
+- description: "make pending allowance tasks"
+  url: /process_allowance_schedules
+  schedule: every 1 hours
+
+- description: "make interest payments"
+  url: /pay_interest
+  schedule: every 1 hours

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}How-To{% endblock %}
+{% block page_title %}How-To{% endblock %}
+
+{% block header_link %}
+  {% if current_user %}
+  <p><a href="/accounts">Your Children's Accounts</a></p>
+  {% endif %}
+{% endblock %}
+
+{% block main_content %}
+<div id="left_spacer" class="grid_3"><br /></div>
+<div id="main_content" class="grid_6">
+    <p>
+    To get started, <a href="/account_new">Add a new account</a>.  You need to
+    supply a name, opening date, currency, interest and allowance information.
+    I'll soon be adding a nice graph to show you what the given allowance +
+    interest settings will mean for *your* pocketbook so you don't make a bad
+    bargain with your little savers.
+    </p>
+    <p>
+    After you have accounts created, some stuff will happen for you
+    automatically and some things you will need to do for yourself.
+    </p>
+    <p>
+    Automatic things:
+    <ul>
+      <li>Interest payments will be processed at 11:59:59 on the appropriate
+          day, but will not be processed until the next day (generally sometime
+          between 12AM and 2AM.</li>
+      <li>Pending allowance payments will be added to the transactions list.</li>
+    </ul>
+    </p>
+    <p>
+
+Allocation allowance payments will need to be completed manually.  When a new
+allowance payment is, scheduled it will show up as pending in the transaction
+list along with a link for you and your child to allocate that allowance money
+to savings and to pocket money.  This is a great time to discuss savings goals
+and interest with your little saver.  I'll be adding savings goals and some
+graphs to show the cost over time of spending that money now, but for now, i'll
+leave that discussion up to you.  :)
+
+</p>
+</div>
+<div id="right_spacer" class="grid_3"><br /></div>
+{% endblock %}

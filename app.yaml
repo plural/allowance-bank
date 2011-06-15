@@ -1,0 +1,21 @@
+application: allowance-bank
+version: 1
+runtime: python
+api_version: 1
+
+builtins:
+- datastore_admin: on
+
+handlers:
+- url: /javascript
+  static_dir: javascript
+
+- url: /stylesheets
+  static_dir: stylesheets
+
+- url: /process_allowance_schedules
+  script: allowancebank.py
+  login: admin
+
+- url: /.*
+  script: allowancebank.py
