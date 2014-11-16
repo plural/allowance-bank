@@ -1,4 +1,4 @@
 # precompiled code
 *.pyc
 
-# pytz
+pytz/
