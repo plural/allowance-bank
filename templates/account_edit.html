@@ -26,7 +26,15 @@
         </select>
       </div>
       <div>Curency: <input type="text" id="curency" name="currency" value="{{ account.currency }}" /></div>
-      <div>Opening Date: <input type="text" id="open_date" name="open_date" value="{{ account.getOpenDate }}"  onchange="updateAccountGraphs(this);" /></div>
+      <div>Timezone
+        <select id="account_timezone" name="account_timezone">
+	  <option value=""></option>
+	  {% for tz in timezone_names %}
+	  <option value="{{ tz }}"{% ifequal tz account.timezone_name %} selected="true"{% endifequal %}>{{ tz }}</option>
+	  {% endfor %}
+        </select>
+      </div>
+      <div>Opening Date: <input type="hidden" id="open_date" name="open_date" value="{{ account.getFormattedOpenDate }}" />{{ account.getFormattedOpenDate }}</div>
       <div>Opening Balance: <input type="text" id="opening_balance" name="opening_balance" value="{{ account.getOpeningBalanceForPrinting }}"  onchange="updateAccountGraphs(this);" /></div>
       <div>Allowance Amount: <input type="text" id="allowance_amount" name="allowance_amount" value="{{ account.getAllowanceAmountForPrinting }}"  onchange="updateAccountGraphs(this);" /></div>
       <div>Allowance Frequency:
@@ -35,7 +43,7 @@
           <option value="monthly" {% ifequal account.allowance_frequency 'monthly' %} selected="true"{% endifequal %}>monthly</option>
         </select>
       </div>
-      <div>Allowance Start Date: <input type="text" id="allowance_start_date" name="allowance_start_date" value="{{ account.allowance_start_date }}" onchange="updateAccountGraphs(this);" /></div>
+      <div>Allowance Start Date: <input type="text" id="allowance_start_date" name="allowance_start_date" value="{{ account.getAllowanceStartDate }}" onchange="updateAccountGraphs(this);" /></div>
       <div><input type="submit" value="Update Account"></div>
     </form>
 </div>

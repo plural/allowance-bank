@@ -23,8 +23,16 @@
           <option value="monthly">Monthly</option>
         </select>
       </div>
+      <input type="hidden" name="open_date" id="open_date" value="{{ today }}" />
       <div>Curency: <input type="text" id="currency" name="currency" value="USD" onchange="updateAccountGraphs(this);" /></div>
-      <div>Opening Date: <input type="text" id="open_date" name="open_date" value="{{ today }}" onchange="updateAccountGraphs(this);" /></div>
+      <div>Timezone
+        <select id="account_timezone" name="account_timezone">
+	  <option value=""></option>
+	  {% for tz in timezone_names %}
+	  <option value="{{ tz }}">{{ tz }}</option>
+	  {% endfor %}
+        </select>
+      </div>
       <div>Opening Balance: <input type="text" id="opening_balance" name="opening_balance" onchange="updateAccountGraphs(this);" /></div>
       <div>Allowance Amount: <input type="text" id="allowance_amount" name="allowance_amount" onchange="updateAccountGraphs(this);" /></div>
       <div>Allowance Frequency:
@@ -38,7 +46,7 @@
     </form>
 </div>
 <div id="graphygoodness" class="grid_3">
-  <div id="balance_chart">A graph with the account balances for the next year will be drawn when you fill out the opening, intererst and allowance fields on the form. Use this graph to help you find the right settings for your child's account.</div>
+  <div id="balance_chart">A graph with the account balances for the next year will be drawn when you fill out the interest and allowance fields on the form. Use this graph to help you find the right settings for your child's account.</div>
   <div id="balance_details"></div>
   <br />
 </div>

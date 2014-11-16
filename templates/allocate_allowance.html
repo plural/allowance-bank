@@ -37,7 +37,7 @@ function updateAllocations(element) {
     {{ account.getImgSrc }}
     <form action="/allocate_allowance" method="post">
       <input type="hidden" name="account" value="{{ account.key }}" />
-      <input type="hidden" name="date" value="{{ pending_transaction.transaction_date }}" />
+      <input type="hidden" name="date" value="{{ pending_transaction.FormattedDate }}" />
       <div>Allocate {{ pending_transaction.getAmountForPrinting }} Allowance:
       <input type="hidden" name="amount" value="{{ pending_transaction.getAmountForPrinting }}" /></div>
       <div>Amount to Save: <input type="text" name="save_amount" value="{{ pending_transaction.getAmountForPrinting }}" onchange="updateAllocations(this)" /></div>

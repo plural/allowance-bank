@@ -1,10 +1,16 @@
-application: allowance-bank
+application: allowance-bank-hrd
 version: 1
-runtime: python
+runtime: python27
 api_version: 1
+threadsafe: true
+
+libraries:
+ - name: pycrypto
+   version: "2.6"
 
 builtins:
-- datastore_admin: on
+- remote_api: on
+- appstats: on
 
 handlers:
 - url: /javascript
@@ -14,8 +20,10 @@ handlers:
   static_dir: stylesheets
 
 - url: /process_allowance_schedules
-  script: allowancebank.py
+  script: allowancebank.application
   login: admin
+  secure: always
 
 - url: /.*
-  script: allowancebank.py
+  script: allowancebank.application
+  secure: always

@@ -28,12 +28,6 @@ indexes:
   - name: transaction_date
     direction: desc
 
-- kind: PendingAccountTransaction
-  properties:
-  - name: savings_account
-  - name: transaction_date
-    direction: desc
-
 - kind: SavingsAccount
   properties:
   - name: parent_user

@@ -2,14 +2,19 @@ import cgi
 import imghdr
 import logging
 import os
+import pytz
 import time
+import util
+import webapp2
 
+from Crypto.Hash import SHA256
 from datetime import datetime
 from datetime import date
 from datetime import timedelta
 from datetime import tzinfo
+from models import SavingsAccount
+from models import AccountTransaction
 from google.appengine.api import images
-from google.appengine.api import memcache
 from google.appengine.api import users
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
@@ -22,23 +27,13 @@ kTemplatesDir = os.path.join(os.path.dirname(__file__), 'templates')
 def getTemplatePath(template):
   return os.path.join(kTemplatesDir, template)
 
-def getYMDInCentralTime(datetime_value):
-  return datetime.fromtimestamp(time.mktime(datetime_value.utctimetuple()),
-                                Central_tzinfo()).strftime('%Y-%m-%d')
-
-def formatMoney(amount_in_micros):
-  return "%.2f" % (amount_in_micros / 1000000.00)
-
-def formatShortDate(date_value):
-  return date_value.strftime('%Y-%m-%d')
-
-def parseShortDate(date_string):
-  return datetime.strptime(date_string, '%Y-%m-%d').date()
-
-
-class Index(webapp.RequestHandler):
+class Index(webapp2.RequestHandler):
   def get(self):
     if users.get_current_user():
+      logging.info('User is %s', users.get_current_user().email())
+      h = SHA256.new()
+      h.update(users.get_current_user().email())
+      logging.info('SHA256 hash is %s', h.hexdigest())
       url =  users.create_logout_url('/')
       url_linktext =  'Logout'
     else:
@@ -53,7 +48,7 @@ class Index(webapp.RequestHandler):
     self.response.out.write(template.render(getTemplatePath('index.html'),
                                             template_values))
 
-class HowTo(webapp.RequestHandler):
+class HowTo(webapp2.RequestHandler):
   def get(self):
     if users.get_current_user():
       url =  users.create_logout_url('/')
@@ -71,121 +66,7 @@ class HowTo(webapp.RequestHandler):
                                             template_values))
 
 
-class SavingsAccount(db.Model):
-  parent_user = db.UserProperty()
-  child_first_name = db.StringProperty()
-  child_image = db.BlobProperty()
-  open_date = db.DateProperty(auto_now_add=True)
-  currency = db.StringProperty()
-  interest_rate = db.FloatProperty()
-  interest_compound_frequency = db.StringProperty(
-      choices=set(['weekly', 'monthly']))
-  opening_balance = db.IntegerProperty()
-  allowance_amount = db.IntegerProperty()
-  allowance_frequency = db.StringProperty(
-      choices=set(['weekly', 'monthly']))
-  # will determine the day of the allowance dispersal
-  allowance_start_date = db.DateProperty()
-
-  def getImgSrc(self):
-    if self.child_image:
-      return '<img src="/pic?account=%s" width=200 height=200 />' % self.key()
-    else:
-      return ""
-
-  def getOpeningBalanceForPrinting(self):
-    return formatMoney(self.opening_balance)
-
-  def getOpenDate(self):
-    return formatShortDate(self.open_date)
-
-  # TODO(jgessner): move the memcache stuff to AccountList.
-  def getBalance(self):
-    cache_key = '%s_balance' % self.key()
-    balance = memcache.get(cache_key)
-    if balance is not None:
-      return balance
-
-    balance = self.calculateBalance()
-    memcache.set(cache_key, balance, 30)
-    return balance
-
-  def calculateBalance(self, max_time=None):
-    transactions = AccountTransaction.getTransactionsForAccount(self, max_time)
-    balance = self.opening_balance
-    for transaction in transactions:
-      if transaction.transaction_type != 'allowance_to_cash':
-        if transaction.transaction_type == 'withdrawal':
-          balance -= transaction.amount
-        else:
-          balance += transaction.amount
-    return balance
-
-  def getBalanceForPrinting(self):
-    return '%.2f' % (self.getBalance() / 1000000.0)
-
-  # TODO(jgessner): move the ForPrinting methods somewhere else.
-  def getAllowanceAmountForPrinting(self):
-    return formatMoney(self.allowance_amount)
-
-  def hasPendingTransactions(self, transaction_date=None, find_any_status=False):
-    return PendingAccountTransaction.hasPendingTransactions(self, transaction_date, find_any_status)
-
-
-class AccountTransaction(db.Model):
-  savings_account = db.ReferenceProperty(SavingsAccount)
-  transaction_type = db.StringProperty(choices=set(['interest',
-                                                    'allowance_to_savings',
-                                                    'allowance_to_cash',
-                                                    'withdrawal']))
-  transaction_time = db.DateTimeProperty(auto_now_add=True)
-  amount = db.IntegerProperty()
-
-  def getAmountForPrinting(self):
-    return formatMoney(self.amount)
-
-  @staticmethod
-  def getTransactionsForAccount(account, max_time=None):
-    transactions_query = AccountTransaction.all()
-    transactions_query.filter('savings_account', account)
-    if max_time:
-      transactions_query.filter('transaction_time <=', max_time)
-    transactions_query.order('-transaction_time')
-    transactions = transactions_query.fetch(100)
-    return transactions
-
-
-class PendingAccountTransaction(db.Model):
-  savings_account = db.ReferenceProperty(SavingsAccount)
-  transaction_date = db.DateProperty()
-  amount = db.IntegerProperty()
-  processed = db.BooleanProperty()
-
-  def getAmountForPrinting(self):
-    return "%.2f" % (self.amount / 1000000.00)
-
-  @staticmethod
-  def getPendingTransactionsForAccount(account):
-    pending_transactions_query = PendingAccountTransaction.all()
-    pending_transactions_query.filter('savings_account', account)
-    pending_transactions_query.filter('processed', False)
-    pending_transactions_query.order('-transaction_date')
-    pending_transactions = pending_transactions_query.fetch(100)
-    return pending_transactions
-
-  @staticmethod
-  def hasPendingTransactions(account, transaction_date=None, find_any_status=False):
-    pending_query = PendingAccountTransaction.all()
-    pending_query.filter('savings_account', account)
-    if not find_any_status:
-      pending_query.filter('processed', False)
-    if transaction_date:
-      pending_query.filter('transaction_date', transaction_date)
-    pending_results = pending_query.fetch(1)
-    return len(pending_results) > 0
-
-
-class SavingsAccountList(webapp.RequestHandler):
+class SavingsAccountList(webapp2.RequestHandler):
   def get(self):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
@@ -221,14 +102,17 @@ class SavingsAccountList(webapp.RequestHandler):
         getTemplatePath('account_list.html'), template_values))
 
 
-class SavingsAccountNew(webapp.RequestHandler):
+class SavingsAccountNew(webapp2.RequestHandler):
   def get(self):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
 
+    timezone_names = pytz.common_timezones
+    timezone_names.sort()
     template_values = {
-      'today': getYMDInCentralTime(datetime.now()),
       'current_user': users.get_current_user(),
+      'timezone_names': timezone_names,
+      'today': date.today().strftime('%Y-%m-%d'),
       'url': users.create_logout_url('/'),
       'url_linktext': 'Logout',
     }
@@ -252,22 +136,28 @@ class SavingsAccountNew(webapp.RequestHandler):
     account.opening_balance = int(float(self.request.get('opening_balance')) * 1000000)
     account.allowance_amount = int(float(self.request.get('allowance_amount')) * 1000000)
     account.allowance_frequency = self.request.get('allowance_frequency')
-    account.allowance_start_date = parseShortDate(self.request.get('allowance_start_date'))
+    account.allowance_start_date = util.parseShortDate(self.request.get('allowance_start_date'))
+    account.timezone_name = self.request.get('account_timezone')
 
     account.put()
 
     self.redirect('/accounts')
 
 
-class SavingsAccountEdit(webapp.RequestHandler):
+class SavingsAccountEdit(webapp2.RequestHandler):
   def get(self):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
     key = self.request.get('account')
     account = db.get(key)
+
+    timezone_names = pytz.common_timezones
+    timezone_names.sort()
+
     template_values = {
       'current_user': users.get_current_user(),
       'account': account,
+      'timezone_names': timezone_names,
       'url': users.create_logout_url('/'),
       'url_linktext': 'Logout',
     }
@@ -288,11 +178,10 @@ class SavingsAccountEdit(webapp.RequestHandler):
     account.currency = self.request.get('currency')
     account.interest_rate = float(self.request.get('interest_rate'))
     account.interest_compound_frequency = self.request.get('interest_compound_frequency')
-    account.open_date =  parseShortDate(self.request.get('open_date'))
     account.opening_balance = int(float(self.request.get('opening_balance')) * 1000000)
     account.allowance_amount = int(float(self.request.get('allowance_amount')) * 1000000)
     account.allowance_frequency = self.request.get('allowance_frequency')
-    account.allowance_start_date = parseShortDate(self.request.get('allowance_start_date'))
+    account.allowance_start_date = util.parseShortDate(self.request.get('allowance_start_date'))
     account.put()
 
     account.child_first_name = self.request.get('child_first_name')
@@ -301,7 +190,7 @@ class SavingsAccountEdit(webapp.RequestHandler):
     self.redirect('/accounts')
 
 
-class TransactionNew(webapp.RequestHandler):
+class TransactionNew(webapp2.RequestHandler):
   def get(self):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
@@ -328,12 +217,13 @@ class TransactionNew(webapp.RequestHandler):
     transaction.savings_account = account
     transaction.transaction_type = self.request.get('transaction_type')
     transaction.amount = int(float(self.request.get('amount')) * 1000000)
+    transaction.transaction_local_date = util.getTodayForTimezone(account.timezone_name)
     transaction.put()
 
     self.redirect('/accounts')
 
 
-class TransactionList(webapp.RequestHandler):
+class TransactionList(webapp2.RequestHandler):
   def get(self):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
@@ -345,34 +235,31 @@ class TransactionList(webapp.RequestHandler):
     transactions = transactions_query.fetch(100)
 
     balance = account.opening_balance
-    processed_transactions = []
-    processed_transactions.append({
-      'date': account.open_date,
+    # Start off with the open balance as a transaction.
+    processed_transactions = [{
+      'date': account.getFormattedOpenDate(),
       'type': 'Opening Balance',
       'amount': '%.2f' % (account.opening_balance/ 1000000.0),
       'balance': '%.2f' % (balance / 1000000.0),
-    })
+    }]
     for transaction in transactions:
-      if transaction.transaction_type in ['allowance_to_savings', 'interest']:
-        balance += transaction.amount
-      elif transaction.transaction_type == 'withdrawal':
+      if transaction.transaction_type == 'withdrawal':
         balance -= transaction.amount
+      else:
+        balance += transaction.amount
 
       processed_transactions.append({
-        'date': getYMDInCentralTime(transaction.transaction_time),
+        'date': util.formatShortDate(transaction.transaction_local_date),
         'type': transaction.transaction_type,
         'amount': '%.2f' % (transaction.amount / 1000000.0),
         'balance': '%.2f' % (balance / 1000000.0),
       })
     processed_transactions.reverse()
 
-    pending_transactions = PendingAccountTransaction.getPendingTransactionsForAccount(account)
-
     template_values = {
       'current_user': users.get_current_user(),
       'account': account,
       'transactions': processed_transactions,
-      'pending_transactions': pending_transactions,
       'url': users.create_logout_url('/'),
       'url_linktext': 'Logout',
     }
@@ -381,7 +268,7 @@ class TransactionList(webapp.RequestHandler):
         getTemplatePath('transaction_list.html'), template_values))
 
 
-class Pic(webapp.RequestHandler):
+class Pic(webapp2.RequestHandler):
   def detect_mime_type(self, image):
     if image[1:4] == 'PNG': return 'image/png'
     if image[0:3] == 'GIF': return 'image/gif'
@@ -398,175 +285,82 @@ class Pic(webapp.RequestHandler):
       self.response.out.write('no image found')
 
 
-class ProcessAllowanceSchedules(webapp.RequestHandler):
+class ProcessAllowanceSchedules(webapp2.RequestHandler):
   def get(self):
     accounts_query = SavingsAccount.all()
     accounts = accounts_query.fetch(100)
     for account in accounts:
-      today = datetime.now(Central_tzinfo()).date()
+      today = util.getTodayForTimezone(account.timezone_name)
       should_schedule_allowance_payment = False
       if account.allowance_frequency == 'weekly':
         days_between = today - account.allowance_start_date
         if days_between.days >= 0 and days_between.days % 7 == 0:
           should_schedule_allowance_payment = True
+        else:
+          logging.info("Not the right day to schedule weekly allowance for %s", account.child_first_name)
       else:
+        # Monthly
+        # TODO(jgessner): Deal with a Feb 29 start date.
         if today.day == allowance_start_date.day:
           should_schedule_allowance_payment = True
+        else:
+          logging.info("Not the right day to schedule monthly allowance for %s", account.child_first_name)
 
       logging.info('Should i schedule the %s allowance of %s starting %s for %s? %s' % (account.allowance_frequency, account.getAllowanceAmountForPrinting(), account.allowance_start_date, account.child_first_name, should_schedule_allowance_payment))
       if should_schedule_allowance_payment:
-        scheduled = False
-        pending_found = PendingAccountTransaction.hasPendingTransactions(account, transaction_date=today, find_any_status=True)
-        if not pending_found:
-          pending_transaction = PendingAccountTransaction()
-          pending_transaction.savings_account = account
-          pending_transaction.amount = account.allowance_amount
-          pending_transaction.transaction_date = today
-          pending_transaction.processed = False
-          pending_transaction.put()
-          scheduled = True
-        logging.info("Scheduled? %s" % scheduled)
+        if not AccountTransaction.hasAllowanceForDate(account, transaction_date=today):
+          transaction = AccountTransaction()
+          transaction.savings_account = account
+          transaction.transaction_type = 'allowance'
+          transaction.transaction_local_date = today
+          transaction.amount = account.allowance_amount
+          transaction.put()
 
 
-class AllocateAllowance(webapp.RequestHandler):
+class PayInterest(webapp2.RequestHandler):
   def get(self):
-    if not users.get_current_user():
-      self.redirect(users.create_login_url(self.request.uri))
-
-    account = SavingsAccount.get(self.request.get('account'))
-    pending_query = PendingAccountTransaction.all()
-    pending_query.filter('savings_account', account)
-    pending_query.filter('transaction_date', parseShortDate(self.request.get('date')))
-    pending_transactions = pending_query.fetch(1)
-    # TODO(jgessner): make a flash message if there is an error
-    if len(pending_transactions) == 0:
-      self.redirect('/accounts')
-    pending_transaction = pending_transactions[0]
-
-    template_values = {
-      'current_user': users.get_current_user(),
-      'account': account,
-      'pending_transaction': pending_transaction,
-      'url': users.create_logout_url('/'),
-      'url_linktext': 'Logout',
-    }
-
-    self.response.out.write(template.render(
-        getTemplatePath('allocate_allowance.html'), template_values))
-
-
-  def post(self):
-    if not users.get_current_user():
-      self.redirect(users.create_login_url(self.request.uri))
-
-    account = SavingsAccount.get(self.request.get('account'))
-    pending_query = PendingAccountTransaction.all()
-    pending_query.filter('savings_account', account)
-    pending_query.filter('transaction_date', parseShortDate(self.request.get('date')))
-    pending_transactions = pending_query.fetch(1)
-    # TODO(jgessner): make a flash message if there is an error
-    if len(pending_transactions) == 0:
-      self.redirect('/accounts')
-    pending_transaction = pending_transactions[0]
-
-    # make sure the allocation amounts add up
-    savings_amount = int(float(self.request.get('save_amount')) * 1000000)
-    cash_amount = int(float(self.request.get('pocket_amount')) * 1000000)
-    submitted_total = savings_amount + cash_amount
-    if submitted_total == pending_transaction.amount:
-      transaction = AccountTransaction()
-      transaction.savings_account = account
-      transaction.transaction_type = 'allowance_to_savings'
-      transaction.amount = savings_amount
-      transaction.put()
-
-      transaction = AccountTransaction()
-      transaction.savings_account = account
-      transaction.transaction_type = 'allowance_to_cash'
-      transaction.amount = cash_amount
-      transaction.put()
-
-      pending_transaction.processed = True
-      pending_transaction.put()
-
-    self.redirect('/accounts')
-
-
-class PayInterest(webapp.RequestHandler):
-  def get(self):
-    self.response.out.write("processing interest payments!<br />")
     accounts_query = SavingsAccount.all()
     accounts = accounts_query.fetch(100)
     for account in accounts:
-      today = datetime.now(Central_tzinfo()).date()
+      today = util.getTodayForTimezone(account.timezone_name)
       yesterday = today + timedelta(days=-1)
       yesterday_transaction_time = datetime(
           yesterday.year,
           yesterday.month,
           yesterday.day,
-          23, 59, 59, 999999, Central_tzinfo())
+          23, 59, 59, 999999, pytz.timezone(account.timezone_name))
       should_schedule_interest_payment = False
       if account.interest_compound_frequency == 'weekly':
-        days_between = yesterday - account.open_date
+        days_between = yesterday - account.getOpenDate()
         if days_between.days > 0 and days_between.days % 7 == 0:
           should_schedule_interest_payment = True
+        else:
+          logging.info('Not the right day to schedule weekly interest payment for %s', account.child_first_name)
       else:
-        if yesterday > account.open_date and yesterday.day == account.open_date.day:
+        if yesterday > account.open_datetime and yesterday.day == account.open_datetime.day:
           should_schedule_interest_payment = True
+        else:
+          logging.info('Not the right day to schedule monthly interest payment for %s', account.child_first_name)
 
-      self.response.out.write('Should i pay interest %s for %s? %s<br />' % (account.getAllowanceAmountForPrinting(), account.child_first_name, should_schedule_interest_payment))
+      logging.info('It is the right day to pay interest for %s', account.child_first_name)
       if should_schedule_interest_payment:
         scheduled = False
-        # TODO(jgessner): move this into AccountTransaction
-        interest_query = AccountTransaction.all()
-        interest_query.filter('savings_account', account)
-        interest_query.filter('transaction_time', yesterday_transaction_time)
-        interest_query.filter('transaction_type', 'interest')
-        interest_results = interest_query.fetch(1)
-        interest_found = False
-        for p in interest_results:
-          interest_found = True
-        if not interest_found:
-          bad_interest_amount = int(account.calculateBalance() * (account.interest_rate / 100))
+        if not AccountTransaction.hasInterestForDate(account, transaction_date=yesterday):
           interest_amount = int(account.calculateBalance(max_time=yesterday_transaction_time) * (account.interest_rate / 100))
           interest_transaction = AccountTransaction()
           interest_transaction.savings_account = account
           interest_transaction.transaction_type = 'interest'
           interest_transaction.amount = interest_amount
           interest_transaction.transaction_time = yesterday_transaction_time
+          interest_transaction.transaction_local_date = yesterday
           interest_transaction.put()
           scheduled = True
-        self.response.out.write("Scheduled? %s<br />" % scheduled)
+          logging.info('Interest payment %0.2f processed for %s', (interest_amount / 1000000.0), account.child_first_name)
+        else:
+          logging.info('Interest payment already processed for %s', account.child_first_name)
 
 
-# stolen from http://code.google.com/appengine/docs/python/datastore/typesandpropertyclasses.html#datetime
-# this is utter madness.
-class Central_tzinfo(tzinfo):
-  """Implementation of the US Central timezone."""
-  def utcoffset(self, dt):
-    return timedelta(hours=-6) + self.dst(dt)
-
-  def _FirstSunday(self, dt):
-    """First Sunday on or after dt."""
-    return dt + timedelta(days=(6-dt.weekday()))
-
-  def dst(self, dt):
-    # 2 am on the second Sunday in March
-    dst_start = self._FirstSunday(datetime(dt.year, 3, 8, 2))
-    # 1 am on the first Sunday in November
-    dst_end = self._FirstSunday(datetime(dt.year, 11, 1, 1))
-
-    if dst_start <= dt.replace(tzinfo=None) < dst_end:
-      return timedelta(hours=1)
-    else:
-      return timedelta(hours=0)
-  def tzname(self, dt):
-    if self.dst(dt) == timedelta(hours=0):
-      return "CST"
-    else:
-      return "CDT"
-
-application = webapp.WSGIApplication(
+application = webapp2.WSGIApplication(
                                      [('/', Index),
                                       ('/howto', HowTo),
                                       ('/accounts', SavingsAccountList),
@@ -575,13 +369,6 @@ application = webapp.WSGIApplication(
                                       ('/transaction_list', TransactionList),
                                       ('/transaction_new', TransactionNew),
                                       ('/pic', Pic),
-                                      ('/allocate_allowance', AllocateAllowance),
                                       ('/process_allowance_schedules', ProcessAllowanceSchedules),
                                       ('/pay_interest', PayInterest),
                                      ], debug=True)
-
-def main():
-  run_wsgi_app(application)
-
-if __name__ == '__main__':
-  main()

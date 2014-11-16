@@ -13,7 +13,9 @@
 {% include 'account_graphs.js' %}
 
 <div id="transaction_list" class="grid_4">
-  {{ account.getImgSrc }}
+  {% if account.child_image %}
+  <img src="/pic?account={{ account.key }}" width=200 height=200 />
+  {% endif %}
   <table>
     <thead>
       <tr>
@@ -26,10 +28,10 @@
     <tbody>
     {% for pending_transaction in pending_transactions %}
       <tr>
-        <td>{{ pending_transaction.transaction_date }}</td>
+        <td>{{ pending_transaction.FormattedDate }}</td>
         <td>pending allowance</td>
         <td>{{ pending_transaction.getAmountForPrinting }}</td>
-        <td><a href="/allocate_allowance?account={{ account.key }}&date={{ pending_transaction.transaction_date }}">Allocate Allowance</a></td>
+        <td><a href="/allocate_allowance?account={{ account.key }}&date={{ pending_transaction.FormattedDate }}">Allocate Allowance</a></td>
       </tr>
     {% endfor %}
     {% for transaction in transactions %}
@@ -107,7 +109,7 @@ function updateTransactionGraph() {
     }
     dataTable.addRow();
     dataTable.setValue(dayNum, 0, thisDate);
-    var balance = parseFloat(transactionsSumValuesThrough(rawTransactions, thisDate, ['Opening Balance', 'withdrawal', 'allowance_to_savings', 'interest']).toFixed(2));
+    var balance = parseFloat(transactionsSumValuesThrough(rawTransactions, thisDate, ['Opening Balance', 'deposit', 'allowance', 'interest']).toFixed(2));
     var interest = parseFloat(transactionsSumValuesThrough(rawTransactions, thisDate, ['interest']).toFixed(2));
     dataTable.setValue(dayNum, 1, balance);
     dataTable.setValue(dayNum, 2, interest);
