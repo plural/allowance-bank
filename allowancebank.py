@@ -19,7 +19,7 @@ from google.appengine.api import users
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import run_wsgi_app
-from google.appengine.ext import db
+from google.appengine.ext import ndb
 
 kTemplatesDir = os.path.join(os.path.dirname(__file__), 'templates')
 
@@ -30,10 +30,6 @@ def getTemplatePath(template):
 class Index(webapp2.RequestHandler):
   def get(self):
     if users.get_current_user():
-      logging.info('User is %s', users.get_current_user().email())
-      h = SHA256.new()
-      h.update(users.get_current_user().email())
-      logging.info('SHA256 hash is %s', h.hexdigest())
       url =  users.create_logout_url('/')
       url_linktext =  'Logout'
     else:
@@ -71,13 +67,10 @@ class SavingsAccountList(webapp2.RequestHandler):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
 
-    accounts_query = SavingsAccount.all()
-    accounts_query.order('child_first_name')
-    accounts_query.filter('parent_user', users.get_current_user())
+    accounts_query = SavingsAccount.query()
+    accounts_query.order(SavingsAccount.child_first_name)
+    accounts_query.filter(SavingsAccount.parent_user == users.get_current_user())
     accounts = accounts_query.fetch(100)
-    transactions = dict()
-    for account in accounts:
-      transactions[account.key()] = AccountTransaction.getTransactionsForAccount(account)
 
     accounts_left = []
     accounts_right = []
@@ -93,7 +86,6 @@ class SavingsAccountList(webapp2.RequestHandler):
       'current_user': users.get_current_user(),
       'accounts_left': accounts_left,
       'accounts_right': accounts_right,
-      'transactions': transactions,
       'url': users.create_logout_url('/'),
       'url_linktext': 'Logout',
     }
@@ -148,8 +140,8 @@ class SavingsAccountEdit(webapp2.RequestHandler):
   def get(self):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
-    key = self.request.get('account')
-    account = db.get(key)
+    key = ndb.Key(urlsafe=self.request.get('account'))
+    account = key.get() 
 
     timezone_names = pytz.common_timezones
     timezone_names.sort()
@@ -168,8 +160,8 @@ class SavingsAccountEdit(webapp2.RequestHandler):
   def post(self):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
-    key = self.request.get('account')
-    account = db.get(key)
+    key = ndb.Key(urlsafe=self.request.get('account'))
+    account = key.get()
     account.parent_user = users.get_current_user()
     account.child_first_name = self.request.get('child_first_name')
     # TODO(jgessner): make this a best fit instead of a blind resize
@@ -194,8 +186,8 @@ class TransactionNew(webapp2.RequestHandler):
   def get(self):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
-    key = self.request.get('account')
-    account = db.get(key)
+    key = ndb.Key(urlsafe=self.request.get('account'))
+    account = key.get()
     template_values = {
       'current_user': users.get_current_user(),
       'account': account,
@@ -210,11 +202,11 @@ class TransactionNew(webapp2.RequestHandler):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
 
-    account_key = self.request.get('account')
-    account = db.get(account_key)
+    account_key = ndb.Key(urlsafe=self.request.get('account'))
+    account = account_key.get()
 
     transaction = AccountTransaction()
-    transaction.savings_account = account
+    transaction.savings_account = account.key
     transaction.transaction_type = self.request.get('transaction_type')
     transaction.amount = int(float(self.request.get('amount')) * 1000000)
     transaction.transaction_local_date = util.getTodayForTimezone(account.timezone_name)
@@ -228,10 +220,11 @@ class TransactionList(webapp2.RequestHandler):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
 
-    account = SavingsAccount.get(self.request.get('account'))
-    transactions_query = AccountTransaction.all()
-    transactions_query.filter('savings_account', account)
-    transactions_query.order('transaction_time')
+    account_key = ndb.Key(urlsafe=self.request.get('account'))
+    account = account_key.get()
+    transactions_query = AccountTransaction.query()
+    transactions_query.filter(AccountTransaction.savings_account == account.key)
+    transactions_query.order(AccountTransaction.transaction_time)
     transactions = transactions_query.fetch(100)
 
     balance = account.opening_balance
@@ -276,7 +269,8 @@ class Pic(webapp2.RequestHandler):
     return None
 
   def get(self):
-    account = SavingsAccount.get(self.request.get('account'))
+    account_key = ndb.Key(urlsafe=self.request.get('account'))
+    account = account_key.get()
     if account.child_image:
       filetype = self.detect_mime_type(account.child_image)
       self.response.headers['Content-Type'] = filetype
@@ -287,7 +281,7 @@ class Pic(webapp2.RequestHandler):
 
 class ProcessAllowanceSchedules(webapp2.RequestHandler):
   def get(self):
-    accounts_query = SavingsAccount.all()
+    accounts_query = SavingsAccount.query()
     accounts = accounts_query.fetch(100)
     for account in accounts:
       today = util.getTodayForTimezone(account.timezone_name)
@@ -319,7 +313,7 @@ class ProcessAllowanceSchedules(webapp2.RequestHandler):
 
 class PayInterest(webapp2.RequestHandler):
   def get(self):
-    accounts_query = SavingsAccount.all()
+    accounts_query = SavingsAccount.query()
     accounts = accounts_query.fetch(100)
     for account in accounts:
       today = util.getTodayForTimezone(account.timezone_name)
@@ -342,9 +336,8 @@ class PayInterest(webapp2.RequestHandler):
         else:
           logging.info('Not the right day to schedule monthly interest payment for %s', account.child_first_name)
 
-      logging.info('It is the right day to pay interest for %s', account.child_first_name)
       if should_schedule_interest_payment:
-        scheduled = False
+        logging.info('It is the right day to pay interest for %s', account.child_first_name)
         if not AccountTransaction.hasInterestForDate(account, transaction_date=yesterday):
           interest_amount = int(account.calculateBalance(max_time=yesterday_transaction_time) * (account.interest_rate / 100))
           interest_transaction = AccountTransaction()
@@ -354,7 +347,6 @@ class PayInterest(webapp2.RequestHandler):
           interest_transaction.transaction_time = yesterday_transaction_time
           interest_transaction.transaction_local_date = yesterday
           interest_transaction.put()
-          scheduled = True
           logging.info('Interest payment %0.2f processed for %s', (interest_amount / 1000000.0), account.child_first_name)
         else:
           logging.info('Interest payment already processed for %s', account.child_first_name)

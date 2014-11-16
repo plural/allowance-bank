@@ -11,7 +11,7 @@
 <div id="accounts_left" class="grid_6 ">
     {% for account in accounts_left %}
       {% if account.child_image %}
-      <img src="/pic?account={{ account.key }}" width=200 height=200 />
+      <img src="/pic?account={{ account.key.urlsafe }}" width=200 height=200 />
       {% endif %}
         <p>
           <h3>{{ account.child_first_name}}</h3>
@@ -24,16 +24,11 @@
           Allowance: {{ account.getAllowanceAmountForPrinting }}
           {{ account.allowance_frequency}}
           <br />
-          <a href="/account_edit?account={{ account.key }}">edit</a>
+          <a href="/account_edit?account={{ account.key.urlsafe }}">edit</a>
           |
-          <a href="/transaction_list?account={{ account.key }}">view transactions</a>
+          <a href="/transaction_list?account={{ account.key.urlsafe }}">view transactions</a>
           |
-          <a href="/transaction_new?account={{ account.key }}">add transaction</a>
-        <ul>
-          {% for transaction in transactions.account %}
-            <li>{{ transaction.getAmountForPrinting }} on {{ transaction.transaction_time }}</li>
-          {% endfor %}
-        </ul>
+          <a href="/transaction_new?account={{ account.key.urlsafe }}">add transaction</a>
       </p>
     {% endfor %}
 </div>
@@ -41,7 +36,7 @@
 <div id="accounts_right" class="grid_6">
     {% for account in accounts_right %}
       {% if account.child_image %}
-      <img src="/pic?account={{ account.key }}" width=200 height=200 />
+      <img src="/pic?account={{ account.key.urlsafe }}" width=200 height=200 />
       {% endif %}
         <p>
           <h3>{{ account.child_first_name}}</h3>
@@ -54,16 +49,11 @@
           Allowance: {{ account.getAllowanceAmountForPrinting }}
           {{ account.allowance_frequency}}
           <br />
-          <a href="/account_edit?account={{ account.key }}">edit</a>
+          <a href="/account_edit?account={{ account.key.urlsafe }}">edit</a>
           |
-          <a href="/transaction_list?account={{ account.key }}">view transactions</a>
+          <a href="/transaction_list?account={{ account.key.urlsafe }}">view transactions</a>
           |
-          <a href="/transaction_new?account={{ account.key }}">add transaction</a>
-        <ul>
-          {% for transaction in transactions.account %}
-            <li>{{ transaction.getAmountForPrinting }} on {{ transaction.transaction_time }}</li>
-          {% endfor %}
-        </ul>
+          <a href="/transaction_new?account={{ account.key.urlsafe }}">add transaction</a>
       </p>
     {% endfor %}
 </div>

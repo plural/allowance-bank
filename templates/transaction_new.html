@@ -13,7 +13,7 @@
 <div id="transaction_list" class="grid_8">
     {{ account.getImgSrc }}
     <form action="/transaction_new" method="post">
-      <input type="hidden" name="account" value="{{ account.key }}" />
+      <input type="hidden" name="account" value="{{ account.key.urlsafe }}" />
       <div>Transaction Type:
         <select name="transaction_type">
           <!-- TODO(jgessner): add a deposit transaction type -->

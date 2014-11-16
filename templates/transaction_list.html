@@ -14,7 +14,7 @@
 
 <div id="transaction_list" class="grid_4">
   {% if account.child_image %}
-  <img src="/pic?account={{ account.key }}" width=200 height=200 />
+  <img src="/pic?account={{ account.key.urlsafe }}" width=200 height=200 />
   {% endif %}
   <table>
     <thead>
@@ -31,7 +31,7 @@
         <td>{{ pending_transaction.FormattedDate }}</td>
         <td>pending allowance</td>
         <td>{{ pending_transaction.getAmountForPrinting }}</td>
-        <td><a href="/allocate_allowance?account={{ account.key }}&date={{ pending_transaction.FormattedDate }}">Allocate Allowance</a></td>
+        <td><a href="/allocate_allowance?account={{ account.key.urlsafe }}&date={{ pending_transaction.FormattedDate }}">Allocate Allowance</a></td>
       </tr>
     {% endfor %}
     {% for transaction in transactions %}

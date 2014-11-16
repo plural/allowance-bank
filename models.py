@@ -1,25 +1,25 @@
 import pytz
 import util
 
-from google.appengine.ext import db
+from google.appengine.ext import ndb
 from google.appengine.api import memcache
 
-class SavingsAccount(db.Model):
-  parent_user = db.UserProperty()
-  child_first_name = db.StringProperty()
-  child_image = db.BlobProperty()
-  open_datetime = db.DateTimeProperty(auto_now_add=True)
-  currency = db.StringProperty()
-  interest_rate = db.FloatProperty()
-  interest_compound_frequency = db.StringProperty(
+class SavingsAccount(ndb.Model):
+  parent_user = ndb.UserProperty()
+  child_first_name = ndb.StringProperty()
+  child_image = ndb.BlobProperty()
+  open_datetime = ndb.DateTimeProperty(auto_now_add=True)
+  currency = ndb.StringProperty()
+  interest_rate = ndb.FloatProperty()
+  interest_compound_frequency = ndb.StringProperty(
       choices=set(['weekly', 'monthly']))
-  opening_balance = db.IntegerProperty()
-  allowance_amount = db.IntegerProperty()
-  allowance_frequency = db.StringProperty(
+  opening_balance = ndb.IntegerProperty()
+  allowance_amount = ndb.IntegerProperty()
+  allowance_frequency = ndb.StringProperty(
       choices=set(['weekly', 'monthly']))
   # will determine the day of the allowance dispersal
-  allowance_start_date = db.DateProperty()
-  timezone_name = db.StringProperty()
+  allowance_start_date = ndb.DateProperty()
+  timezone_name = ndb.StringProperty()
 
   def getOpeningBalanceForPrinting(self):
     return util.formatMoney(self.opening_balance)
@@ -39,7 +39,7 @@ class SavingsAccount(db.Model):
 
   # TODO(jgessner): move the memcache stuff to AccountList.
   def getBalance(self):
-    cache_key = '%s_balance' % self.key()
+    cache_key = '%s_balance' % self.key
     balance = memcache.get(cache_key)
     if balance is not None:
       return balance
@@ -66,16 +66,16 @@ class SavingsAccount(db.Model):
     return util.formatMoney(self.allowance_amount)
 
 
-class AccountTransaction(db.Model):
-  savings_account = db.ReferenceProperty(SavingsAccount)
-  transaction_type = db.StringProperty(choices=set(['interest',
+class AccountTransaction(ndb.Model):
+  savings_account = ndb.KeyProperty(kind=SavingsAccount)
+  transaction_type = ndb.StringProperty(choices=set(['interest',
                                                     'allowance',
                                                     'deposit',
                                                     'withdrawal']))
-  transaction_time = db.DateTimeProperty(auto_now_add=True)
-  transaction_local_date = db.DateProperty()
-  amount = db.IntegerProperty()
-  memo = db.StringProperty()
+  transaction_time = ndb.DateTimeProperty(auto_now_add=True)
+  transaction_local_date = ndb.DateProperty()
+  amount = ndb.IntegerProperty()
+  memo = ndb.StringProperty()
 
   def getAmountForPrinting(self):
     return util.formatMoney(self.amount)
@@ -85,11 +85,11 @@ class AccountTransaction(db.Model):
 
   @staticmethod
   def getTransactionsForAccount(account, max_time=None):
-    transactions_query = AccountTransaction.all()
-    transactions_query.filter('savings_account', account)
+    transactions_query = AccountTransaction.query()
+    transactions_query.filter(AccountTransaction.savings_account == account.key)
     if max_time:
-      transactions_query.filter('transaction_time <=', max_time)
-    transactions_query.order('-transaction_time')
+      transactions_query.filter(AccountTransaction.transaction_time <= max_time)
+    transactions_query.order(AccountTransaction.transaction_time)
     transactions = transactions_query.fetch(100)
     return transactions
 
@@ -103,17 +103,17 @@ class AccountTransaction(db.Model):
 
   @staticmethod
   def hasTransactionOnDateOfType(account, transaction_date, transaction_type):
-    allowance_query = AccountTransaction.all()
-    allowance_query.filter('savings_account', account)
-    allowance_query.filter('transaction_local_date', transaction_date)
-    allowance_query.filter('transaction_type', transaction_type)
+    allowance_query = AccountTransaction.query()
+    allowance_query.filter(AccountTransaction.savings_account == account.key)
+    allowance_query.filter(AccountTransaction.transaction_local_date == transaction_date)
+    allowance_query.filter(AccountTransaction.transaction_type == transaction_type)
     allowance_results = allowance_query.fetch(1)
     return len(allowance_results) > 0
 
-class SaverParent(db.Model):
-  email = db.StringProperty()
-  name = db.StringProperty()
-  nickname = db.StringProperty()
-  date_added = db.DateTimeProperty(auto_now_add=True)
+class SaverParent(ndb.Model):
+  email = ndb.StringProperty()
+  name = ndb.StringProperty()
+  nickname = ndb.StringProperty()
+  date_added = ndb.DateTimeProperty(auto_now_add=True)
   # Invitation Key will be cleared out when an invitation is accepted.
-  invitation_key = db.StringProperty()
+  invitation_key = ndb.StringProperty()
