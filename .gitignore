@@ -1,4 +1,5 @@
 # precompiled code
 *.pyc
+*.swp
 
 pytz/
