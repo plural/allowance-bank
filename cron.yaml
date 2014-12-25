@@ -1,5 +1,5 @@
 cron:
-- description: "make pending allowance tasks"
+- description: "make allowance payments"
   url: /process_allowance_schedules
   schedule: every 1 hours
 
