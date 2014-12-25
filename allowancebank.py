@@ -223,8 +223,8 @@ class TransactionList(webapp2.RequestHandler):
     account_key = ndb.Key(urlsafe=self.request.get('account'))
     account = account_key.get()
     transactions_query = AccountTransaction.query()
-    transactions_query.filter(AccountTransaction.savings_account == account.key)
-    transactions_query.order(AccountTransaction.transaction_time)
+    transactions_query = transactions_query.filter(AccountTransaction.savings_account == account.key)
+    transactions_query = transactions_query.order(AccountTransaction.transaction_time)
     transactions = transactions_query.fetch(100)
 
     balance = account.opening_balance
@@ -304,7 +304,7 @@ class ProcessAllowanceSchedules(webapp2.RequestHandler):
       if should_schedule_allowance_payment:
         if not AccountTransaction.hasAllowanceForDate(account, transaction_date=today):
           transaction = AccountTransaction()
-          transaction.savings_account = account
+          transaction.savings_account = account.key
           transaction.transaction_type = 'allowance'
           transaction.transaction_local_date = today
           transaction.amount = account.allowance_amount
@@ -318,11 +318,13 @@ class PayInterest(webapp2.RequestHandler):
     for account in accounts:
       today = util.getTodayForTimezone(account.timezone_name)
       yesterday = today + timedelta(days=-1)
+      # The transaction time must be in UTC, but that really means it can't have a tzinfo.
       yesterday_transaction_time = datetime(
           yesterday.year,
           yesterday.month,
           yesterday.day,
-          23, 59, 59, 999999, pytz.timezone(account.timezone_name))
+          23, 59, 59, 999999, pytz.timezone(account.timezone_name)).astimezone(pytz.UTC).replace(tzinfo=None)
+      logging.info('Transaction time is %s', yesterday_transaction_time)
       should_schedule_interest_payment = False
       if account.interest_compound_frequency == 'weekly':
         days_between = yesterday - account.getOpenDate()
@@ -341,7 +343,7 @@ class PayInterest(webapp2.RequestHandler):
         if not AccountTransaction.hasInterestForDate(account, transaction_date=yesterday):
           interest_amount = int(account.calculateBalance(max_time=yesterday_transaction_time) * (account.interest_rate / 100))
           interest_transaction = AccountTransaction()
-          interest_transaction.savings_account = account
+          interest_transaction.savings_account = account.key
           interest_transaction.transaction_type = 'interest'
           interest_transaction.amount = interest_amount
           interest_transaction.transaction_time = yesterday_transaction_time
