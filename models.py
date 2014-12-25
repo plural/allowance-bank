@@ -68,10 +68,8 @@ class SavingsAccount(ndb.Model):
 
 class AccountTransaction(ndb.Model):
   savings_account = ndb.KeyProperty(kind=SavingsAccount)
-  transaction_type = ndb.StringProperty(choices=set(['interest',
-                                                    'allowance',
-                                                    'deposit',
-                                                    'withdrawal']))
+  transaction_type = ndb.StringProperty(choices=set(
+      ['interest', 'allowance', 'deposit', 'withdrawal']))
   transaction_time = ndb.DateTimeProperty(auto_now_add=True)
   transaction_local_date = ndb.DateProperty()
   amount = ndb.IntegerProperty()
@@ -86,10 +84,10 @@ class AccountTransaction(ndb.Model):
   @staticmethod
   def getTransactionsForAccount(account, max_time=None):
     transactions_query = AccountTransaction.query()
-    transactions_query.filter(AccountTransaction.savings_account == account.key)
+    transactions_query = transactions_query.filter(AccountTransaction.savings_account == account.key)
     if max_time:
-      transactions_query.filter(AccountTransaction.transaction_time <= max_time)
-    transactions_query.order(AccountTransaction.transaction_time)
+      transactions_query = transactions_query.filter(AccountTransaction.transaction_time <= max_time)
+    transactions_query = transactions_query.order(AccountTransaction.transaction_time)
     transactions = transactions_query.fetch(100)
     return transactions
 
@@ -103,12 +101,11 @@ class AccountTransaction(ndb.Model):
 
   @staticmethod
   def hasTransactionOnDateOfType(account, transaction_date, transaction_type):
-    allowance_query = AccountTransaction.query()
-    allowance_query.filter(AccountTransaction.savings_account == account.key)
-    allowance_query.filter(AccountTransaction.transaction_local_date == transaction_date)
-    allowance_query.filter(AccountTransaction.transaction_type == transaction_type)
-    allowance_results = allowance_query.fetch(1)
-    return len(allowance_results) > 0
+    query = AccountTransaction.query()
+    query = query.filter(AccountTransaction.savings_account == account.key)
+    query = query.filter(AccountTransaction.transaction_local_date == transaction_date)
+    query = query.filter(AccountTransaction.transaction_type == transaction_type)
+    return len(query.fetch(1)) > 0
 
 class SaverParent(ndb.Model):
   email = ndb.StringProperty()
