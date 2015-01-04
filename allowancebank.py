@@ -311,6 +311,7 @@ class ProcessAllowanceSchedules(webapp2.RequestHandler):
           transaction.put()
 
 
+# TODO(jgessner): Make most of this an instance method on SavingsAccount
 class PayInterest(webapp2.RequestHandler):
   def get(self):
     accounts_query = SavingsAccount.query()
