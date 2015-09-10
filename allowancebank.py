@@ -225,7 +225,7 @@ class TransactionList(webapp2.RequestHandler):
     transactions_query = AccountTransaction.query()
     transactions_query = transactions_query.filter(AccountTransaction.savings_account == account.key)
     transactions_query = transactions_query.order(AccountTransaction.transaction_time)
-    transactions = transactions_query.fetch(100)
+    transactions = transactions_query.fetch(1000)
 
     balance = account.opening_balance
     # Start off with the open balance as a transaction.

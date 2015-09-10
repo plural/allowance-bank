@@ -88,7 +88,7 @@ class AccountTransaction(ndb.Model):
     if max_time:
       transactions_query = transactions_query.filter(AccountTransaction.transaction_time <= max_time)
     transactions_query = transactions_query.order(AccountTransaction.transaction_time)
-    transactions = transactions_query.fetch(100)
+    transactions = transactions_query.fetch(1000)
     return transactions
 
   @staticmethod
