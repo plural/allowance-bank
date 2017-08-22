@@ -15,6 +15,7 @@ from datetime import tzinfo
 from models import SavingsAccount
 from models import AccountTransaction
 from google.appengine.api import images
+from google.appengine.api import mail
 from google.appengine.api import users
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
@@ -118,6 +119,7 @@ class SavingsAccountNew(webapp2.RequestHandler):
     account = SavingsAccount()
     account.parent_user = users.get_current_user()
     account.child_first_name = self.request.get('child_first_name')
+    account.child_email = self.request.get('child_email')
     # TODO(jgessner): make this a best fit instead of a blind resize
     if self.request.get("child_image"):
       account.child_image = images.resize(self.request.get("child_image"), 200, 200)
@@ -164,6 +166,7 @@ class SavingsAccountEdit(webapp2.RequestHandler):
     account = key.get()
     account.parent_user = users.get_current_user()
     account.child_first_name = self.request.get('child_first_name')
+    account.child_email = self.request.get('child_email')
     # TODO(jgessner): make this a best fit instead of a blind resize
     if self.request.get("child_image"):
       account.child_image = images.resize(self.request.get("child_image"), 200, 200)
@@ -176,6 +179,7 @@ class SavingsAccountEdit(webapp2.RequestHandler):
     account.allowance_start_date = util.parseShortDate(self.request.get('allowance_start_date'))
     account.put()
 
+    # TODO(jgessner): huh?
     account.child_first_name = self.request.get('child_first_name')
     account.put()
 
@@ -205,12 +209,38 @@ class TransactionNew(webapp2.RequestHandler):
     account_key = ndb.Key(urlsafe=self.request.get('account'))
     account = account_key.get()
 
+    current_balance = account.calculateBalance()
+    new_transaction_amount = int(float(self.request.get('amount')) * 1000000)
+    new_balance = current_balance + new_transaction_amount
+
     transaction = AccountTransaction()
     transaction.savings_account = account.key
     transaction.transaction_type = self.request.get('transaction_type')
-    transaction.amount = int(float(self.request.get('amount')) * 1000000)
+    transaction.amount = new_transaction_amount 
     transaction.transaction_local_date = util.getTodayForTimezone(account.timezone_name)
+    transaction.memo = self.request.get('memo')
     transaction.put()
+
+    account = account_key.get()
+    mail.send_mail(sender='transaction@allowance-bank-hrd.appspotmail.com',
+                   to="%s <%s>" % (account.child_first_name, account.child_email),
+                   subject="Something happened in your Allowance Bank",
+                   body="""Oh hello, %s!
+
+A new transaction was just recorded for your account.
+Transaction Type: %s
+Transaction Amount: $%s
+Memo: %s
+
+Previous Balance: $%s
+New Balance: $%s
+""" % (
+    account.child_first_name,
+    transaction.transaction_type,
+    util.formatMoney(transaction.amount),
+    transaction.memo,
+    util.formatMoney(current_balance),
+    util.formatMoney(new_balance)))
 
     self.redirect('/accounts')
 
@@ -223,15 +253,17 @@ class TransactionList(webapp2.RequestHandler):
     account_key = ndb.Key(urlsafe=self.request.get('account'))
     account = account_key.get()
     transactions_query = AccountTransaction.query()
-    transactions_query = transactions_query.filter(AccountTransaction.savings_account == account.key)
+    transactions_query = transactions_query.filter(
+        AccountTransaction.savings_account == account.key)
     transactions_query = transactions_query.order(AccountTransaction.transaction_time)
     transactions = transactions_query.fetch(1000)
 
     balance = account.opening_balance
-    # Start off with the open balance as a transaction.
+    # Start off with the opening balance as a transaction.
     processed_transactions = [{
       'date': account.getFormattedOpenDate(),
       'type': 'Opening Balance',
+      'memo': '',
       'amount': '%.2f' % (account.opening_balance/ 1000000.0),
       'balance': '%.2f' % (balance / 1000000.0),
     }]
@@ -241,9 +273,13 @@ class TransactionList(webapp2.RequestHandler):
       else:
         balance += transaction.amount
 
+      memo = transaction.memo
+      if memo == None:
+          memo = ''
       processed_transactions.append({
         'date': util.formatShortDate(transaction.transaction_local_date),
         'type': transaction.transaction_type,
+        'memo': memo,
         'amount': '%.2f' % (transaction.amount / 1000000.0),
         'balance': '%.2f' % (balance / 1000000.0),
       })

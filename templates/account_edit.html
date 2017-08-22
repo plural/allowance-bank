@@ -17,6 +17,7 @@
     <form action="/account_edit" enctype="multipart/form-data" method="post">
       <input type="hidden" name="account" value="{{ account.key.urlsafe }}" />
       <div>Child's First Name: <input type="text" id="child_first_name" name="child_first_name" value="{{ account.child_first_name }}" /></div>
+      <div>Child's Email: <input type="text" id="child_email" name="child_email" value="{{ account.child_email }}" /></div>
       <div>Child's Image (will be resized to fit in 200x200) <input type="file" id="child_image" name="child_image"/></div>
       <div>Interest Rate (%): <input type="text" id="interest_rate" name="interest_rate" value="{{ account.interest_rate }}"  onchange="updateAccountGraphs(this);" /></div>
       <div>Interest Compound Frequency:

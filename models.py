@@ -1,13 +1,15 @@
 import pytz
 import util
 
-from google.appengine.ext import ndb
+from google.appengine.api import datastore 
 from google.appengine.api import memcache
+from google.appengine.ext import ndb
 
 class SavingsAccount(ndb.Model):
   parent_user = ndb.UserProperty()
   child_first_name = ndb.StringProperty()
   child_image = ndb.BlobProperty()
+  child_email = ndb.StringProperty()
   open_datetime = ndb.DateTimeProperty(auto_now_add=True)
   currency = ndb.StringProperty()
   interest_rate = ndb.FloatProperty()
@@ -73,7 +75,7 @@ class AccountTransaction(ndb.Model):
   transaction_time = ndb.DateTimeProperty(auto_now_add=True)
   transaction_local_date = ndb.DateProperty()
   amount = ndb.IntegerProperty()
-  memo = ndb.StringProperty()
+  memo = ndb.StringProperty(default='')
 
   def getAmountForPrinting(self):
     return util.formatMoney(self.amount)
@@ -88,6 +90,7 @@ class AccountTransaction(ndb.Model):
     if max_time:
       transactions_query = transactions_query.filter(AccountTransaction.transaction_time <= max_time)
     transactions_query = transactions_query.order(AccountTransaction.transaction_time)
+    # TODO(jgessner): Up this limit.
     transactions = transactions_query.fetch(1000)
     return transactions
 
