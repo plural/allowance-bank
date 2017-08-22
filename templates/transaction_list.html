@@ -16,6 +16,9 @@
   {% if account.child_image %}
   <img src="/pic?account={{ account.key.urlsafe }}" width=200 height=200 />
   {% endif %}
+  <div>
+    <a href="/transaction_new?account={{ account.key.urlsafe }}">add transaction</a>
+  </div>
   <table>
     <thead>
       <tr>
