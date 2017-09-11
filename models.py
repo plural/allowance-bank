@@ -85,14 +85,12 @@ class AccountTransaction(ndb.Model):
 
   @staticmethod
   def getTransactionsForAccount(account, max_time=None):
-    transactions_query = AccountTransaction.query()
-    transactions_query = transactions_query.filter(AccountTransaction.savings_account == account.key)
+    transactions_query = AccountTransaction.query(ancestor=account.key)
     if max_time:
       transactions_query = transactions_query.filter(AccountTransaction.transaction_time <= max_time)
     transactions_query = transactions_query.order(AccountTransaction.transaction_time)
-    # TODO(jgessner): Up this limit.
-    transactions = transactions_query.fetch(1000)
-    return transactions
+    # TODO(jgessner): Increase this limit.
+    return transactions_query.fetch(1000)
 
   @staticmethod
   def hasAllowanceForDate(account, transaction_date):

@@ -21,12 +21,10 @@ indexes:
   - name: transaction_time
     direction: desc
 
-- kind: PendingAccountTransaction
+- kind: AccountTransaction
+  ancestor: yes
   properties:
-  - name: processed
-  - name: savings_account
-  - name: transaction_date
-    direction: desc
+  - name: transaction_time
 
 - kind: SavingsAccount
   properties:

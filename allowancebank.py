@@ -8,19 +8,20 @@ import util
 import webapp2
 
 from Crypto.Hash import SHA256
-from datetime import datetime
 from datetime import date
+from datetime import datetime
 from datetime import timedelta
 from datetime import tzinfo
-from models import SavingsAccount
-from models import AccountTransaction
 from google.appengine.api import images
 from google.appengine.api import mail
+from google.appengine.api import taskqueue
 from google.appengine.api import users
+from google.appengine.ext import ndb
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import run_wsgi_app
-from google.appengine.ext import ndb
+from models import AccountTransaction
+from models import SavingsAccount
 
 kTemplatesDir = os.path.join(os.path.dirname(__file__), 'templates')
 
@@ -100,8 +101,10 @@ class SavingsAccountNew(webapp2.RequestHandler):
     if not users.get_current_user():
       self.redirect(users.create_login_url(self.request.uri))
 
-    timezone_names = pytz.common_timezones
+    timezone_names = pytz.all_timezones # common_timezones
+    print '\nThere are %d common timezones.\n' % len(timezone_names)
     timezone_names.sort()
+    print '\nThere are %d common timezones.\n' % len(timezone_names)
     template_values = {
       'current_user': users.get_current_user(),
       'timezone_names': timezone_names,
@@ -185,7 +188,6 @@ class SavingsAccountEdit(webapp2.RequestHandler):
 
     self.redirect('/accounts')
 
-
 class TransactionNew(webapp2.RequestHandler):
   def get(self):
     if not users.get_current_user():
@@ -201,6 +203,18 @@ class TransactionNew(webapp2.RequestHandler):
 
     self.response.out.write(template.render(
         getTemplatePath('transaction_new.html'), template_values))
+  
+  @ndb.transactional
+  def saveNewTransaction(self, account, transaction_type, transaction_amount, memo):
+    transaction = AccountTransaction(parent=account.key)
+    # TODO(jgessner): remove the extra savings_account field.
+    transaction.savings_account = account.key
+    transaction.transaction_type = transaction_type
+    transaction.amount = int(float(transaction_amount) * 1000000)
+    transaction.transaction_local_date = util.getTodayForTimezone(account.timezone_name)
+    transaction.memo = memo
+    transaction.put()
+    return transaction.key
 
   def post(self):
     if not users.get_current_user():
@@ -209,38 +223,14 @@ class TransactionNew(webapp2.RequestHandler):
     account_key = ndb.Key(urlsafe=self.request.get('account'))
     account = account_key.get()
 
-    current_balance = account.calculateBalance()
-    new_transaction_amount = int(float(self.request.get('amount')) * 1000000)
-    new_balance = current_balance + new_transaction_amount
+    transaction_key = self.saveNewTransaction(account, self.request.get('transaction_type'), self.request.get('amount'), self.request.get('memo'))
 
-    transaction = AccountTransaction()
-    transaction.savings_account = account.key
-    transaction.transaction_type = self.request.get('transaction_type')
-    transaction.amount = new_transaction_amount 
-    transaction.transaction_local_date = util.getTodayForTimezone(account.timezone_name)
-    transaction.memo = self.request.get('memo')
-    transaction.put()
-
-    account = account_key.get()
-    mail.send_mail(sender='transaction@allowance-bank-hrd.appspotmail.com',
-                   to="%s <%s>" % (account.child_first_name, account.child_email),
-                   subject="Something happened in your Allowance Bank",
-                   body="""Oh hello, %s!
-
-A new transaction was just recorded for your account.
-Transaction Type: %s
-Transaction Amount: $%s
-Memo: %s
-
-Previous Balance: $%s
-New Balance: $%s
-""" % (
-    account.child_first_name,
-    transaction.transaction_type,
-    util.formatMoney(transaction.amount),
-    transaction.memo,
-    util.formatMoney(current_balance),
-    util.formatMoney(new_balance)))
+    task = taskqueue.add(
+        url='/send_transaction_email',
+        params={
+            'account': account.key.urlsafe(),
+            'transaction': transaction_key.urlsafe(),
+            })
 
     self.redirect('/accounts')
 
@@ -252,9 +242,7 @@ class TransactionList(webapp2.RequestHandler):
 
     account_key = ndb.Key(urlsafe=self.request.get('account'))
     account = account_key.get()
-    transactions_query = AccountTransaction.query()
-    transactions_query = transactions_query.filter(
-        AccountTransaction.savings_account == account.key)
+    transactions_query = AccountTransaction.query(ancestor=account_key)
     transactions_query = transactions_query.order(AccountTransaction.transaction_time)
     transactions = transactions_query.fetch(1000)
 
@@ -264,7 +252,7 @@ class TransactionList(webapp2.RequestHandler):
       'date': account.getFormattedOpenDate(),
       'type': 'Opening Balance',
       'memo': '',
-      'amount': '%.2f' % (account.opening_balance/ 1000000.0),
+      'amount': '%.2f' % (account.opening_balance / 1000000.0),
       'balance': '%.2f' % (balance / 1000000.0),
     }]
     for transaction in transactions:
@@ -339,12 +327,18 @@ class ProcessAllowanceSchedules(webapp2.RequestHandler):
       logging.info('Should i schedule the %s allowance of %s starting %s for %s? %s' % (account.allowance_frequency, account.getAllowanceAmountForPrinting(), account.allowance_start_date, account.child_first_name, should_schedule_allowance_payment))
       if should_schedule_allowance_payment:
         if not AccountTransaction.hasAllowanceForDate(account, transaction_date=today):
-          transaction = AccountTransaction()
+          transaction = AccountTransaction(parent=account.key)
           transaction.savings_account = account.key
           transaction.transaction_type = 'allowance'
           transaction.transaction_local_date = today
           transaction.amount = account.allowance_amount
           transaction.put()
+          task = taskqueue.add(
+              url='/send_transaction_email',
+              params={
+                  'account': account.key.urlsafe(),
+                  'transaction': transaction.key.urlsafe(),
+                  })
 
 
 # TODO(jgessner): Make most of this an instance method on SavingsAccount
@@ -379,16 +373,74 @@ class PayInterest(webapp2.RequestHandler):
         logging.info('It is the right day to pay interest for %s', account.child_first_name)
         if not AccountTransaction.hasInterestForDate(account, transaction_date=yesterday):
           interest_amount = int(account.calculateBalance(max_time=yesterday_transaction_time) * (account.interest_rate / 100))
-          interest_transaction = AccountTransaction()
+          interest_transaction = AccountTransaction(parent=account.key)
           interest_transaction.savings_account = account.key
           interest_transaction.transaction_type = 'interest'
           interest_transaction.amount = interest_amount
           interest_transaction.transaction_time = yesterday_transaction_time
           interest_transaction.transaction_local_date = yesterday
           interest_transaction.put()
+          task = taskqueue.add(
+              url='/send_transaction_email',
+              params={
+                  'account': account.key.urlsafe(),
+                  'transaction': interest_transaction.key.urlsafe(),
+                  })
           logging.info('Interest payment %0.2f processed for %s', (interest_amount / 1000000.0), account.child_first_name)
         else:
           logging.info('Interest payment already processed for %s', account.child_first_name)
+
+
+class SetParentsHandler(webapp2.RequestHandler):
+  def get(self):
+    self.response.headers['Content-Type'] = 'text/plain' 
+    if not users.get_current_user():
+      self.redirect(users.create_login_url(self.request.uri))
+    t_query = AccountTransaction.query()
+
+    for t in t_query:
+      self.response.out.write('Transaction: %s\n' % t.key)
+      if not t.key.parent():
+        self.response.out.write('No parent for this transaction, making a copy\n')
+        t2 = AccountTransaction(parent=t.savings_account)
+        t2.savings_account = t.savings_account
+        t2.transaction_type = t.transaction_type
+        t2.transaction_time = t.transaction_time
+        t2.transaction_local_date = t.transaction_local_date
+        t2.amount = t.amount
+        t2.memo = t.memo
+        t2.put()
+        self.response.out.write('  New transaction key: %s\n' % t2.key)
+        self.response.out.write('  Deleting %s\n' % t.key)
+        t.key.delete()
+
+
+class SendTransactionEmailHandler(webapp2.RequestHandler):
+  def post(self):
+    account = ndb.Key(urlsafe=self.request.get('account')).get()
+    balance = account.calculateBalance() 
+
+    transaction = ndb.Key(urlsafe=self.request.get('transaction')).get()
+    logging.info('Details from triggering transaction is %s', transaction)
+
+    mail.send_mail(sender='transaction@allowance-bank-hrd.appspotmail.com',
+                   to="%s <%s>" % (account.child_first_name, account.child_email),
+                   cc="gessners@multiply.org",
+                   subject="Something happened in your Allowance Bank",
+                   body="""Oh hello, %s!
+
+A new transaction was just recorded for your account.
+Transaction Type: %s
+Transaction Amount: $%s
+Memo: %s
+
+New Balance: $%s
+""" % (
+    account.child_first_name,
+    transaction.transaction_type,
+    util.formatMoney(transaction.amount),
+    transaction.memo,
+    util.formatMoney(balance)))
 
 
 application = webapp2.WSGIApplication(
@@ -402,4 +454,6 @@ application = webapp2.WSGIApplication(
                                       ('/pic', Pic),
                                       ('/process_allowance_schedules', ProcessAllowanceSchedules),
                                       ('/pay_interest', PayInterest),
+                                      ('/send_transaction_email', SendTransactionEmailHandler),
+                                      # ('/set_parents', SetParentsHandler),
                                      ], debug=True)
